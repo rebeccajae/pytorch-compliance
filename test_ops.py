@@ -1,6 +1,6 @@
 import torch
 import pytest
-from compliance_test import check_op_compliance, make_discontiguous_transpose
+from compliance_test import check_op_compliance, make_tensor_discontiguous, check_inplace_op_with_noncontiguous_output
 
 pytestmark = pytest.mark.skipif(
     not torch.backends.mps.is_available(),
@@ -19,14 +19,14 @@ def test_discontiguous_creation():
     """Verify that make_discontiguous_transpose actually creates discontiguous tensors"""
     # Test 2D tensor
     t2d = torch.randn(4, 5)
-    discontig_2d = make_discontiguous_transpose(t2d)
+    discontig_2d = make_tensor_discontiguous(t2d)
     assert not discontig_2d.is_contiguous(), "2D tensor should be discontiguous"
     assert torch.equal(t2d, discontig_2d), "Values should be unchanged"
     assert discontig_2d.shape == t2d.shape, "Shape should be preserved"
 
     # Test 3D tensor
     t3d = torch.randn(3, 4, 5)
-    discontig_3d = make_discontiguous_transpose(t3d)
+    discontig_3d = make_tensor_discontiguous(t3d)
     assert not discontig_3d.is_contiguous(), "3D tensor should be discontiguous"
     assert torch.equal(t3d, discontig_3d), "Values should be unchanged"
     assert discontig_3d.shape == t3d.shape, "Shape should be preserved"
@@ -72,3 +72,37 @@ def test_bmm():
 
     for r in results:
         assert r.passed, r.message
+
+def test_addcmul_not_doing_things():
+    size = (8, 8)
+    input1 = torch.randn(size)
+    input2 = torch.randn(size)
+
+    result = check_inplace_op_with_noncontiguous_output(
+        'addcmul_',
+        size,
+        5.0,
+        input1,
+        input2,
+        backend='mps',
+        value=1.0
+    )
+
+    assert result.passed, result.message
+
+def test_addcdiv_not_doing_things():
+    size = (8, 8)
+    input1 = torch.randn(size)
+    input2 = torch.randn(size) + 0.1  # Avoid division by zero
+
+    result = check_inplace_op_with_noncontiguous_output(
+        'addcdiv_',
+        size,
+        5.0,
+        input1,
+        input2,
+        backend='mps',
+        value=1.0
+    )
+
+    assert result.passed, result.message
